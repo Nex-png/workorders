@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-import pytest
+import pytest # pyright: ignore[reportMissingImports]
 
 from workorders.db import (
     add_work_order,
