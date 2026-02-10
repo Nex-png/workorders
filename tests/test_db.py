@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 
 import pytest # pyright: ignore[reportMissingImports]
 
@@ -12,6 +13,10 @@ from workorders.db import (
     init_db,
     list_work_orders,
     list_work_orders_by_machine,
+    update_work_order,
+    delete_closed_older_than,
+    delete_work_orders_by_machine,
+    delete_all_work_orders,
 )
 
 
@@ -57,6 +62,9 @@ def test_add_work_order_persists_expected_defaults(conn):
     assert row["closed_at"] is None
     assert isinstance(row["created_at"], str)
     assert row["created_at"].endswith("Z")
+    assert row["updated_at"] == row["created_at"]
+    assert row["assigned_to"] is None
+    assert row["notes"] is None
 
 
 def test_add_work_order_invalid_priority_raises_integrity_error(conn):
@@ -124,3 +132,97 @@ def test_list_work_orders_by_machine_filters_machine_and_optional_status(conn):
 
 def test_get_work_order_by_id_returns_none_for_unknown_id(conn):
     assert get_work_order_by_id(conn, 424242) is None
+
+
+def test_update_work_order_updates_fields_and_timestamp(conn):
+    work_order_id = add_work_order(
+        conn,
+        machine_id="M1",
+        issue="Initial issue",
+        priority="med",
+        assigned_to="Alex",
+        notes="Initial notes",
+    )
+    original = get_work_order_by_id(conn, work_order_id)
+    assert original is not None
+
+    updated = update_work_order(
+        conn,
+        work_order_id,
+        issue="Updated issue",
+        priority="high",
+        assigned_to="Priya",
+        notes="Updated notes",
+    )
+    assert updated == 1
+
+    current = get_work_order_by_id(conn, work_order_id)
+    assert current is not None
+    assert current["issue"] == "Updated issue"
+    assert current["priority"] == "high"
+    assert current["assigned_to"] == "Priya"
+    assert current["notes"] == "Updated notes"
+    assert current["updated_at"].endswith("Z")
+
+    original_ts = datetime.fromisoformat(original["updated_at"].replace("Z", "+00:00"))
+    current_ts = datetime.fromisoformat(current["updated_at"].replace("Z", "+00:00"))
+    assert current_ts >= original_ts
+
+
+def test_update_work_order_handles_no_fields_and_missing_id(conn):
+    work_order_id = add_work_order(conn, machine_id="M1", issue="Issue", priority="low")
+
+    no_field_update = update_work_order(conn, work_order_id)
+    assert no_field_update == 0
+
+    missing_update = update_work_order(conn, 999999, issue="No row")
+    assert missing_update == 0
+
+
+def test_delete_work_orders_by_machine_deletes_only_matching_rows(conn):
+    add_work_order(conn, machine_id="KMT-102", issue="A", priority="low")
+    add_work_order(conn, machine_id="KMT-102", issue="B", priority="med")
+    add_work_order(conn, machine_id="KMT-200", issue="C", priority="high")
+
+    deleted = delete_work_orders_by_machine(conn, "KMT-102")
+    assert deleted == 2
+
+    remaining = list_work_orders(conn)
+    assert len(remaining) == 1
+    assert remaining[0]["machine_id"] == "KMT-200"
+
+
+def test_delete_closed_older_than_deletes_only_old_closed_orders(conn):
+    old_closed_id = add_work_order(conn, machine_id="M1", issue="Old closed", priority="low")
+    new_closed_id = add_work_order(conn, machine_id="M2", issue="New closed", priority="med")
+    open_id = add_work_order(conn, machine_id="M3", issue="Still open", priority="high")
+
+    assert close_work_order(conn, old_closed_id) == 1
+    assert close_work_order(conn, new_closed_id) == 1
+
+    conn.execute(
+        "UPDATE work_orders SET closed_at = ?, updated_at = ? WHERE id = ?;",
+        ("2000-01-01T00:00:00Z", "2000-01-01T00:00:00Z", old_closed_id),
+    )
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    conn.execute(
+        "UPDATE work_orders SET closed_at = ?, updated_at = ? WHERE id = ?;",
+        (now, now, new_closed_id),
+    )
+    conn.commit()
+
+    deleted = delete_closed_older_than(conn, 30)
+    assert deleted == 1
+
+    assert get_work_order_by_id(conn, old_closed_id) is None
+    assert get_work_order_by_id(conn, new_closed_id) is not None
+    assert get_work_order_by_id(conn, open_id) is not None
+
+
+def test_delete_all_work_orders_clears_table(conn):
+    add_work_order(conn, machine_id="M1", issue="A", priority="low")
+    add_work_order(conn, machine_id="M2", issue="B", priority="med")
+
+    deleted = delete_all_work_orders(conn)
+    assert deleted == 2
+    assert list_work_orders(conn) == []
