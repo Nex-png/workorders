@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Iterable
+import os
+import hashlib
+import base64
+import hmac
 
 
 # Default SQLite database filename used when no explicit path is provided.
@@ -272,6 +276,95 @@ def delete_closed_older_than(conn: sqlite3.Connection, days: int) -> int:
     )
     conn.commit()
     return cur.rowcount
+
+
+def init_auth(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    conn.commit()
+
+
+def _hash_password(password: str, salt: bytes | None = None, iterations: int = 200_000) -> str:
+    """
+    Returns a string encoding: pbkdf2_sha256$iterations$salt_b64$dk_b64
+    """
+    if salt is None:
+        salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return "pbkdf2_sha256$%d$%s$%s" % (
+        iterations,
+        base64.b64encode(salt).decode("ascii"),
+        base64.b64encode(dk).decode("ascii"),
+    )
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        algo, iters_s, salt_b64, dk_b64 = stored.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        iterations = int(iters_s)
+        salt = base64.b64decode(salt_b64.encode("ascii"))
+        expected = base64.b64decode(dk_b64.encode("ascii"))
+
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return hmac.compare_digest(dk, expected)
+    except Exception:
+        return False
+
+
+def ensure_admin_user(conn: sqlite3.Connection, username: str, password: str) -> None:
+    """
+    Creates an initial user if it doesn't exist.
+    """
+    init_auth(conn)
+    existing = conn.execute("SELECT 1 FROM users WHERE username = ?;", (username,)).fetchone()
+    if existing:
+        return
+    conn.execute(
+        "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?);",
+        (username, _hash_password(password), utc_now_iso()),
+    )
+    conn.commit()
+
+
+def authenticate(conn: sqlite3.Connection, username: str, password: str) -> bool:
+    init_auth(conn)
+    row = conn.execute(
+        "SELECT password_hash FROM users WHERE username = ?;",
+        (username,),
+    ).fetchone()
+    if row is None:
+        return False
+    return _verify_password(password, row["password_hash"])
+
+def ensure_admin_from_env(conn: sqlite3.Connection) -> None:
+    """
+    Bootstraps an admin user from environment variables:
+      WORKORDERS_ADMIN_USER
+      WORKORDERS_ADMIN_PASS
+
+    If either is missing, does nothing (app will require you to set them).
+    """
+    init_auth(conn)
+
+    user = os.getenv("WORKORDERS_ADMIN_USER")
+    pw = os.getenv("WORKORDERS_ADMIN_PASS")
+
+    if not user or not pw:
+        return
+
+    ensure_admin_user(conn, username=user, password=pw)
+
+
 
 
 

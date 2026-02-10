@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from workorders.db import ensure_admin_from_env
 
 from workorders.db import (
     get_connection,
@@ -13,6 +14,8 @@ from workorders.db import (
     delete_all_work_orders,
     delete_work_orders_by_machine,
     delete_closed_older_than,
+    ensure_admin_user,
+    authenticate
 )
 
 st.set_page_config(page_title="Work Orders", page_icon="🛠️", layout="wide")
@@ -28,6 +31,113 @@ with st.sidebar:
 
 conn = get_connection(db_path)
 init_db(conn)
+
+# --- AUTH SETUP ---
+# Create a default user the first time you run the app.
+# Change these immediately after verifying login works.
+ensure_admin_from_env(conn)
+
+
+if "authed" not in st.session_state:
+    st.session_state.authed = False
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+import time
+
+if "failed_logins" not in st.session_state:
+    st.session_state.failed_logins = 0
+if "lock_until" not in st.session_state:
+    st.session_state.lock_until = 0.0
+
+
+
+def login_screen():
+    st.markdown(
+        """
+        <style>
+          .login-card {
+            max-width: 420px;
+            margin: 8vh auto 0 auto;
+            padding: 28px 26px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            backdrop-filter: blur(8px);
+          }
+          .login-title {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 6px;
+          }
+          .login-sub {
+            opacity: 0.8;
+            margin-bottom: 18px;
+          }
+          .tiny {
+            opacity: 0.65;
+            font-size: 12px;
+            margin-top: 12px;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">Sign in</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-sub">Access the Work Orders dashboard</div>', unsafe_allow_html=True)
+    now = time.time()
+    if now < st.session_state.lock_until:
+        secs = int(st.session_state.lock_until - now)
+        st.error(f"Too many failed attempts. Try again in {secs}s.")
+        st.stop()
+
+    username = st.text_input("Username", placeholder="admin")
+    password = st.text_input("Password", type="password", placeholder="••••••••")
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        do_login = st.button("Sign in", type="primary", use_container_width=True)
+    with c2:
+        st.button("Clear", use_container_width=True, on_click=lambda: None)
+
+    if do_login:
+        if authenticate(conn, username.strip(), password):
+            st.session_state.authed = True
+            st.session_state.user = username.strip()
+            st.success("Signed in!")
+            st.rerun()
+        else:
+            st.session_state.failed_logins += 1
+            # lockout after 5 fails for 30 seconds
+            if st.session_state.failed_logins >= 5:
+                st.session_state.lock_until = time.time() + 30
+                st.session_state.failed_logins = 0
+            st.error("Invalid username or password.")
+
+
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def topbar():
+    with st.sidebar:
+        st.markdown("---")
+        st.write(f"Signed in as **{st.session_state.user}**")
+        if st.button("Log out", use_container_width=True):
+            st.session_state.authed = False
+            st.session_state.user = None
+            st.rerun()
+
+
+# Gate the app
+if not st.session_state.authed:
+    login_screen()
+    st.stop()
+
+topbar()
+
 
 def rows_to_df(rows) -> pd.DataFrame:
     data = []
