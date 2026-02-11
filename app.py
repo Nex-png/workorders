@@ -18,13 +18,137 @@ from workorders.db import (
     authenticate
 )
 
-st.set_page_config(page_title="Work Orders", page_icon="🛠️", layout="wide")
+st.set_page_config(page_title="Work Orders", page_icon=":hammer_and_wrench:", layout="wide", initial_sidebar_state="expanded")
+st.markdown(
+    """
+    <style>
+      /* ---- Base typography + layout ---- */
+      html, body, [class*="css"]  {
+        font-feature-settings: "ss01" 1, "ss02" 1;
+      }
+      .block-container {
+        padding-top: 2.2rem !important;
+        padding-bottom: 2.5rem !important;
+        max-width: 1200px !important;
+      }
 
-st.title("🛠️ Work Orders")
-st.caption("SQLite-backed work order tracker")
+      /* ---- Hide Streamlit UI chrome ---- */
+      #MainMenu {visibility: hidden;}
+      footer {visibility: hidden;}
+      /* Keep header visible so sidebar toggle remains accessible. */
+
+      /* ---- Monochrome: soften background and borders ---- */
+      .stApp {
+        background: radial-gradient(1200px 800px at 20% 0%, rgba(255,255,255,0.06), transparent 60%),
+                    radial-gradient(900px 700px at 100% 0%, rgba(255,255,255,0.04), transparent 55%),
+                    linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.0));
+      }
+
+      /* ---- Cards / containers ---- */
+      .mono-card {
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.03);
+        border-radius: 18px;
+        padding: 18px 18px;
+        backdrop-filter: blur(10px);
+      }
+      .mono-title {
+        font-size: 28px;
+        font-weight: 760;
+        letter-spacing: -0.02em;
+        margin: 0 0 4px 0;
+      }
+      .mono-sub {
+        opacity: 0.78;
+        margin: 0 0 14px 0;
+      }
+      .sidebar-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+      }
+      .sidebar-sub {
+        opacity: 0.72;
+        margin: 0;
+        font-size: 13px;
+      }
+
+      /* ---- Buttons: sleek monochrome ---- */
+      .stButton > button {
+        border-radius: 14px !important;
+        border: 1px solid rgba(255,255,255,0.14) !important;
+        background: rgba(255,255,255,0.06) !important;
+        transition: all 150ms ease;
+      }
+      .stButton > button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(255,255,255,0.22) !important;
+        background: rgba(255,255,255,0.10) !important;
+      }
+
+      /* Primary buttons (Streamlit sets data-baseweb attr) */
+      button[kind="primary"] {
+        border-radius: 14px !important;
+        background: rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(255,255,255,0.18) !important;
+      }
+      button[kind="primary"]:hover {
+        background: rgba(255,255,255,0.16) !important;
+        border-color: rgba(255,255,255,0.25) !important;
+      }
+
+      /* ---- Inputs ---- */
+      .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        border-radius: 14px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        background: rgba(255,255,255,0.03) !important;
+      }
+
+      /* ---- Tabs ---- */
+      button[role="tab"] {
+        border-radius: 14px !important;
+      }
+
+      /* ---- Dataframe container ---- */
+      [data-testid="stDataFrame"] {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.10);
+      }
+
+      /* ---- Subtle separators ---- */
+      hr {
+        border-color: rgba(255,255,255,0.10) !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+st.markdown(
+    """
+    <div class="mono-card">
+      <div class="mono-title">Work Orders</div>
+      <div class="mono-sub">Minimal, fast, SQLite-backed tracking for equipment issues.</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.write("")  # spacing
+
 
 with st.sidebar:
-    st.header("Settings")
+    st.markdown(
+        """
+        <div class="mono-card">
+          <div class="sidebar-title">Control Panel</div>
+          <div class="sidebar-sub">Workspace settings and quick tools.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.write("")
     db_path = st.text_input("DB path (optional)", value="")
     if db_path.strip() == "":
         db_path = None
@@ -54,35 +178,16 @@ if "lock_until" not in st.session_state:
 
 def login_screen():
     st.markdown(
-        """
-        <style>
-          .login-card {
-            max-width: 420px;
-            margin: 8vh auto 0 auto;
-            padding: 28px 26px;
-            border-radius: 18px;
-            border: 1px solid rgba(255,255,255,0.12);
-            background: rgba(255,255,255,0.04);
-            backdrop-filter: blur(8px);
-          }
-          .login-title {
-            font-size: 26px;
-            font-weight: 700;
-            margin-bottom: 6px;
-          }
-          .login-sub {
-            opacity: 0.8;
-            margin-bottom: 18px;
-          }
-          .tiny {
-            opacity: 0.65;
-            font-size: 12px;
-            margin-top: 12px;
-          }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+    <div style="max-width: 440px; margin: 10vh auto 0 auto;" class="mono-card">
+      <div class="mono-title" style="font-size:24px;">Sign in</div>
+      <div class="mono-sub">Enter your credentials to access the dashboard.</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown('<div class="login-title">Sign in</div>', unsafe_allow_html=True)
@@ -124,8 +229,33 @@ def login_screen():
 def topbar():
     with st.sidebar:
         st.markdown("---")
-        st.write(f"Signed in as **{st.session_state.user}**")
-        if st.button("Log out", use_container_width=True):
+        st.markdown(
+            f"""
+            <div class="mono-card">
+              <div class="sidebar-title">Signed in</div>
+              <div class="sidebar-sub">{st.session_state.user}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write("")
+
+        st.markdown("#### Quick Actions")
+        if st.button("Go to Add Work Order", use_container_width=True):
+            st.info("Use the Add tab to create a new work order.")
+        if st.button("Refresh Dashboard", use_container_width=True):
+            st.rerun()
+
+        st.markdown("#### Operations")
+        if st.button("Reports (placeholder)", use_container_width=True):
+            st.info("Reports module coming soon.")
+        if st.button("Team Assignments (placeholder)", use_container_width=True):
+            st.info("Team assignment board coming soon.")
+        if st.button("Notifications (placeholder)", use_container_width=True):
+            st.info("Alert and notification settings coming soon.")
+
+        st.markdown("#### Session")
+        if st.button("Sign out", use_container_width=True):
             st.session_state.authed = False
             st.session_state.user = None
             st.rerun()
@@ -212,6 +342,7 @@ with tab_add:
 with tab_list:
     st.subheader("List work orders (search + inline close + details pane + export)")
 
+    st.markdown("<div class='mono-card'>", unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     with c1:
         search = st.text_input("Search (machine/issue/assigned/notes)", placeholder="e.g., leak or KMT-102 or Mark")
@@ -221,6 +352,9 @@ with tab_list:
         priority_filter = st.selectbox("Priority", ["(all)", "low", "med", "high"], index=0, key="list_priority")
     with c4:
         st.write("")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
 
     rows = list_work_orders(conn, status=None if status_filter == "(all)" else status_filter)
     df = rows_to_df(rows)
@@ -236,6 +370,7 @@ with tab_list:
         left, right = st.columns([2.2, 1.2], gap="large")
 
         with left:
+            st.markdown("<div class='mono-card'>", unsafe_allow_html=True)
             st.caption("Select `close_now` for OPEN items, then click Apply closures.")
 
             display_cols = [
@@ -290,6 +425,7 @@ with tab_list:
                     file_name="work_orders_filtered.csv",
                     mime="text/csv",
                 )
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with right:
             st.markdown("### Details")
