@@ -91,6 +91,16 @@ def add_work_order(
     assigned_to: str | None = None,
     notes: str | None = None,
 ) -> int:
+    try:
+        # Preferred location: package-local notifier.
+        from .notify import send_sms
+    except ModuleNotFoundError:
+        try:
+            # Fallback for current project layout where notify.py is at repo root.
+            from notify import send_sms
+        except ModuleNotFoundError:
+            send_sms = None
+
     created_at = utc_now_iso()
     cur = conn.execute(
         """
@@ -103,6 +113,13 @@ def add_work_order(
         (machine_id, issue, priority, created_at, assigned_to, notes, created_at),
     )
     conn.commit()
+    if send_sms is not None:
+        try:
+            send_sms(f"New Work Order #{cur.lastrowid}\nMachine: {machine_id}\nIssue: {issue[:100]}")
+        except Exception:
+            # Never block order creation due to notification issues.
+            pass
+
     return int(cur.lastrowid)
 
 
