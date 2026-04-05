@@ -252,6 +252,14 @@ button[kind="primary"]:hover {
   border-radius: var(--radius-md) !important;
 }
 
+/* ── Hide type markers / input instructions ── */
+/* "Press / to search", keyboard hints, etc.   */
+[data-testid="InputInstructions"] { display: none !important; }
+.stSelectbox  small { display: none !important; }
+.stTextInput  small { display: none !important; }
+.stTextArea   small { display: none !important; }
+.stNumberInput small { display: none !important; }
+
 /* ── Tabs ────────────────────────────────── */
 .stTabs [data-baseweb="tab-list"] {
   gap: 4px !important;
@@ -850,12 +858,15 @@ with tab_orders:
                 st.write("")
 
                 prio_options  = ["low", "med", "high"]
-                issue_edit    = st.text_input("Issue",       value=row["issue"],             key="det_issue")
+                # Keys are scoped to selected_id so edits persist while the same
+                # order is open, but reset cleanly when switching to another order.
+                _k = selected_id
+                issue_edit    = st.text_input("Issue",       value=row["issue"],             key=f"det_issue_{_k}")
                 priority_edit = st.selectbox("Priority",     prio_options,
-                                             index=prio_options.index(prio),                 key="det_prio")
-                assigned_edit = st.text_input("Assigned to", value=row["assigned_to"] or "", key="det_assigned")
+                                             index=prio_options.index(prio),                 key=f"det_prio_{_k}")
+                assigned_edit = st.text_input("Assigned to", value=row["assigned_to"] or "", key=f"det_assigned_{_k}")
                 notes_edit    = st.text_area("Notes",        value=row["notes"] or "",
-                                             height=100,                                      key="det_notes")
+                                             height=100,                                      key=f"det_notes_{_k}")
 
                 da, db_ = st.columns(2)
                 with da:
